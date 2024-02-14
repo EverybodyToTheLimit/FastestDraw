@@ -3,6 +3,8 @@
 var express = require('express');
 var router = express.Router();
 var db = require('../database');
+const bookClass = require('../modules/bookClass');
+const cancelClass = require('../modules/cancelClass');
 
 router.get("/all", function(req, res) {
     db.Booking.findAll()
@@ -24,18 +26,35 @@ router.get("/:id", function(req, res) {
         });
 });
 
-router.put("/", function(req, res) {
-    db.Booking.create({
-        className: req.body.className,
-        startTime: req.body.startTime,
-        bookingUid: req.body.bookingUid
-        })
-        .then( booking => {
-            res.status(200).send(JSON.stringify(booking));
-        })
-        .catch( err => {
-            res.status(500).send(JSON.stringify(err));
+router.put("/:uid", async function (req, res) {
+    const requestedUid = req.params.uid;
+    try {
+        const booking = await db.Booking.findOne({ where: { bookingUid: requestedUid } })
+        if (!booking) {
+            return res.status(404).json({ message: 'Booking not found' });
+          }
+        const response = await cancelClass({booking: booking})
+        booking.bookingType = response.bookingType
+        booking.save()
+        res.status(200).send(JSON.stringify(booking));
+    } catch (err) {
+        res.status(500).send(JSON.stringify({ error: err.message || "An error occurred" }));
+    }
+});
+
+router.put("/", async function (req, res) {
+    try {
+        const response = await bookClass({className: req.body.className, startTime: req.body.startTime});
+        const booking = await db.Booking.create({
+            className: req.body.className,
+            startTime: req.body.startTime,
+            bookingUid: response.uid,
+            bookingType: response.bookingType
         });
+        res.status(200).send(JSON.stringify(booking));
+    } catch (err) {
+        res.status(500).send(JSON.stringify({ error: err.message || "An error occurred" }));
+    }
 });
 
 router.delete("/:id", function(req, res) {
