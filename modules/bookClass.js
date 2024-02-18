@@ -1,6 +1,8 @@
 const { chromium } = require('playwright');
+const playwright = require('playwright');
 const offsetBookingDate = require('../helpers/offsetBookingDate');
 const { v4: uuidv4 } = require('uuid');
+const { expect } = require('@playwright/test');
 
 const bookClass = async ({className, startTime}) => {
 
@@ -15,23 +17,45 @@ const bookClass = async ({className, startTime}) => {
 
     try {
         // Navigate to a website
-        await page.goto('https://www.workoutbristol.co.uk/');
+        await page.goto('https://gymwebsite.com/');
 
         if (!className) {
             throw new Error("Class name is required");
         }
 
         await page.getByRole('navigation').getByRole('link', { name: /members/i }).click({ force: true });
-        await page.locator('#userSigninLogin').fill('bartoszzawlocki+workout@gmail.com');
-        await page.locator('#userSigninPassword').fill('vg&sQGHqi@kQW%x*L$BYYFNXHV5HHi');
+        await page.locator('#userSigninLogin').fill('username');
+        await page.locator('#userSigninPassword').fill('password');
         await page.getByRole('button', { name: 'Sign in' }).click({ force: true });
         await page.getByRole('link', { name: 'Book classes' }).click({ force: true });
         await page.getByRole('link', { name: offsetBookingDate(6) }).click({ force: true });
-        const button = await page
+
+        try {
+            await page          
             .locator('.class')
             .filter({ hasText: className })
             .filter({ hasText: startTime })
-            .getByRole('button');
+            .getByRole('button')
+            .waitFor({ timeout: 100 });
+          } catch (e) {
+            if (e instanceof playwright.errors.TimeoutError) {
+                throw new Error("Button doesn't exist");
+            }
+          }
+ 
+        await expect(page
+            .locator('.class')
+            .filter({ hasText: className })
+            .filter({ hasText: startTime })
+            .getByRole('button')).toBeVisible({ timeout: 100 })
+        
+
+        const button = await page
+        .locator('.class')
+        .filter({ hasText: className })
+        .filter({ hasText: startTime })
+        .getByRole('button');
+        
         const buttonValue = await button.evaluate(node => node.textContent);
         await button
            .click({force: true});
@@ -42,7 +66,6 @@ const bookClass = async ({className, startTime}) => {
 
         return response;
     } catch (error) {
-        // Close the browser in case of an error
         await browser.close();
         throw error;
     }

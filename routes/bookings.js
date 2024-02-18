@@ -16,17 +16,7 @@ router.get("/all", function(req, res) {
         });
 });
 
-router.get("/:id", function(req, res) {
-    db.Booking.findByPk(req.params.id)
-        .then( bookings => {
-            res.status(200).send(JSON.stringify(bookings));
-        })
-        .catch( err => {
-            res.status(500).send(JSON.stringify(err));
-        });
-});
-
-router.put("/:uid", async function (req, res) {
+router.post("/:uid", async function (req, res) {
     const requestedUid = req.params.uid;
     try {
         const booking = await db.Booking.findOne({ where: { bookingUid: requestedUid } })
@@ -36,13 +26,13 @@ router.put("/:uid", async function (req, res) {
         const response = await cancelClass({booking: booking})
         booking.bookingType = response.bookingType
         booking.save()
-        res.status(200).send(JSON.stringify(booking));
+        res.status(200).send((booking));
     } catch (err) {
-        res.status(500).send(JSON.stringify({ error: err.message || "An error occurred" }));
+        res.status(500).send({ error: err.message || "An error occurred" });
     }
 });
 
-router.put("/", async function (req, res) {
+router.post("/", async function (req, res) {
     try {
         const response = await bookClass({className: req.body.className, startTime: req.body.startTime});
         const booking = await db.Booking.create({
@@ -51,9 +41,9 @@ router.put("/", async function (req, res) {
             bookingUid: response.uid,
             bookingType: response.bookingType
         });
-        res.status(200).send(JSON.stringify(booking));
+        res.status(200).send(booking);
     } catch (err) {
-        res.status(500).send(JSON.stringify({ error: err.message || "An error occurred" }));
+        res.status(500).send({ error: err.message || "An error occurred" });
     }
 });
 
