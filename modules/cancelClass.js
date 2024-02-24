@@ -1,6 +1,6 @@
 const { chromium } = require('playwright');
 const offsetBookingDate = require('../helpers/offsetBookingDate');
-
+const dotenv = require('dotenv');
 const cancelClass = async ({booking}) => {
 
     // Launch a headless Chromium browser
@@ -15,7 +15,7 @@ const cancelClass = async ({booking}) => {
     try {
         const {className, startTime} = booking
         // Navigate to a website
-        await page.goto('https://gymwebsite.com/');
+        await page.goto('${process.env.WEBSITE}');
 
         if (!className) {
             throw new Error("Class name is required");
@@ -25,11 +25,11 @@ const cancelClass = async ({booking}) => {
         }
 
         await page.getByRole('navigation').getByRole('link', { name: /members/i }).click({ force: true });
-        await page.locator('#userSigninLogin').fill('username');
-        await page.locator('#userSigninPassword').fill('password');
+        await page.locator('#userSigninLogin').fill('${process.env.USERNAME}');
+        await page.locator('#userSigninPassword').fill('${process.env.PASSWORD}');
         await page.getByRole('button', { name: 'Sign in' }).click({ force: true });
         await page.getByRole('link', { name: 'Book classes' }).click({ force: true });
-        await page.getByRole('link', { name: offsetBookingDate(1) }).click({ force: true });
+        await page.getByRole('link', { name: offsetBookingDate(0) }).click({ force: true });
         const button = await page
             .locator('.class')
             .filter({ hasText: className })

@@ -5,7 +5,6 @@ const { v4: uuidv4 } = require('uuid');
 const { expect } = require('@playwright/test');
 
 const bookClass = async ({className, startTime}) => {
-
     // Launch a headless Chromium browser
     const browser = await chromium.launch();
 
@@ -17,38 +16,32 @@ const bookClass = async ({className, startTime}) => {
 
     try {
         // Navigate to a website
-        await page.goto('https://gymwebsite.com/');
+        await page.goto(process.env.WEBSITE);
 
         if (!className) {
             throw new Error("Class name is required");
         }
 
         await page.getByRole('navigation').getByRole('link', { name: /members/i }).click({ force: true });
-        await page.locator('#userSigninLogin').fill('username');
-        await page.locator('#userSigninPassword').fill('password');
+        await page.locator('#userSigninLogin').fill(process.env.USERNAME);
+        await page.locator('#userSigninPassword').fill(process.env.PASSWORD);
         await page.getByRole('button', { name: 'Sign in' }).click({ force: true });
         await page.getByRole('link', { name: 'Book classes' }).click({ force: true });
         await page.getByRole('link', { name: offsetBookingDate(6) }).click({ force: true });
 
         try {
-            await page          
+            await page
             .locator('.class')
             .filter({ hasText: className })
             .filter({ hasText: startTime })
             .getByRole('button')
-            .waitFor({ timeout: 100 });
+            .waitFor({ timeout: 1000 });
+            await page.screenshot({path: 'screenshot.png', fullpage:true})
           } catch (e) {
             if (e instanceof playwright.errors.TimeoutError) {
-                throw new Error("Button doesn't exist");
+                throw new Error({className: className, starTime: startTime, page: page});
             }
           }
- 
-        await expect(page
-            .locator('.class')
-            .filter({ hasText: className })
-            .filter({ hasText: startTime })
-            .getByRole('button')).toBeVisible({ timeout: 100 })
-        
 
         const button = await page
         .locator('.class')
