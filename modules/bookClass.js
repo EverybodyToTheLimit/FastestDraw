@@ -26,8 +26,11 @@ const bookClass = async ({className, startTime}) => {
         await page.locator('#userSigninLogin').fill(process.env.USERNAME);
         await page.locator('#userSigninPassword').fill(process.env.PASSWORD);
         await page.getByRole('button', { name: 'Sign in' }).click({ force: true });
+        await page.waitForLoadState('domcontentloaded')
         await page.getByRole('link', { name: 'Book classes' }).click({ force: true });
+        await page.waitForLoadState('domcontentloaded')
         await page.getByRole('link', { name: offsetBookingDate(6) }).click({ force: true });
+        await page.waitForLoadState('domcontentloaded')
 
         try {
             await page
@@ -37,9 +40,10 @@ const bookClass = async ({className, startTime}) => {
             .getByRole('button')
             .waitFor({ timeout: 1000 });
             await page.screenshot({path: 'screenshot.png', fullpage:true})
+            await page.waitForLoadState('domcontentloaded')
           } catch (e) {
             if (e instanceof playwright.errors.TimeoutError) {
-                throw new Error({className: className, starTime: startTime, page: page});
+                throw new Error(JSON.stringify(e));
             }
           }
 
