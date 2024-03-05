@@ -38,7 +38,7 @@ const bookClass = async ({className, startTime}) => {
             .filter({ hasText: className })
             .filter({ hasText: startTime })
             .getByRole('button')
-            .waitFor({ timeout: 1000 });
+            .waitFor({ timeout: 2000 });
             await page.screenshot({path: 'screenshot.png', fullpage:true})
             await page.waitForLoadState('domcontentloaded')
           } catch (e) {
