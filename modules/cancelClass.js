@@ -15,7 +15,7 @@ const cancelClass = async ({booking}) => {
     try {
         const {className, startTime} = booking
         // Navigate to a website
-        await page.goto('${process.env.WEBSITE}');
+        await page.goto(process.env.WEBSITE);
 
         if (!className) {
             throw new Error("Class name is required");
@@ -25,8 +25,8 @@ const cancelClass = async ({booking}) => {
         }
 
         await page.getByRole('navigation').getByRole('link', { name: /members/i }).click({ force: true });
-        await page.locator('#userSigninLogin').fill('${process.env.USERNAME}');
-        await page.locator('#userSigninPassword').fill('${process.env.PASSWORD}');
+        await page.locator('#userSigninLogin').fill(process.env.USERNAME);
+        await page.locator('#userSigninPassword').fill(process.env.PASSWORD);
         await page.getByRole('button', { name: 'Sign in' }).click({ force: true });
         await page.getByRole('link', { name: 'Book classes' }).click({ force: true });
         await page.getByRole('link', { name: offsetBookingDate(0) }).click({ force: true });
