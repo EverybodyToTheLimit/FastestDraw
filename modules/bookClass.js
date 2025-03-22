@@ -46,7 +46,7 @@ const bookClass = async ({className, startTime}) => {
         
         await Promise.all([
             page.waitForLoadState('networkidle'),
-            page.getByRole('link', { name: offsetBookingDate(6) }).click({ force: true })
+            page.getByRole('link', { name: offsetBookingDate(2) }).click({ force: true })
         ]);
 
         // More robust class element detection with retry logic
