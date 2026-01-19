@@ -9,9 +9,20 @@ const cancelClass = async ({ booking }) => {
     const browser = await chromium.launch();
     let context;
 
-    if (fs.existsSync(SESSION_FILE)) {
-        context = await browser.newContext({ storageState: SESSION_FILE });
-    } else {
+    try {
+        if (fs.existsSync(SESSION_FILE)) {
+            // Try to load the file
+            const stats = fs.statSync(SESSION_FILE);
+            if (stats.size > 0) {
+                context = await browser.newContext({ storageState: SESSION_FILE });
+            } else {
+                throw new Error("File is empty");
+            }
+        } else {
+            throw new Error("File does not exist");
+        }
+    } catch (e) {
+        console.log("Session file missing or invalid. Starting fresh context.");
         context = await browser.newContext();
     }
 
