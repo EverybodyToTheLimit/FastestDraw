@@ -30,7 +30,7 @@ const bookClass = async ({ className, startTime }) => {
     await page.route('**/*.{png,jpg,jpeg,svg,css,woff,woff2}', route => route.abort());
 
     try {
-        await page.goto(process.env.WEBSITE + '/members/book-classes', { waitUntil: 'domcontentloaded' });
+        await page.goto(process.env.WEBSITE + '/book-classes', { waitUntil: 'domcontentloaded' });
 
         if (await page.getByRole('button', { name: 'Sign in' }).isVisible()) {
             console.log("Session invalid. Logging in...");
