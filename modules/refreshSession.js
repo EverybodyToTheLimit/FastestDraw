@@ -1,11 +1,11 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
-const offsetBookingDate = require('../helpers/offsetBookingDate');
 
 const SESSION_FILE = path.join(__dirname, '../session_state.json');
 
-const cancelClass = async ({ booking }) => {
+const refreshSession = async () => {
+    console.log("Starting Session Refresh...");
     const browser = await chromium.launch();
     let context;
 
@@ -16,41 +16,34 @@ const cancelClass = async ({ booking }) => {
     }
 
     const page = await context.newPage();
+    
     await page.route('**/*.{png,jpg,jpeg,svg,css,woff,woff2}', route => route.abort());
 
     try {
-        const { className, startTime } = booking;
-        
-        await page.goto(`${process.env.WEBSITE}/book-classes/date/${offsetBookingDate(0)}`, { waitUntil: 'domcontentloaded' });
+        await page.goto(process.env.WEBSITE + '/members/book-classes', { waitUntil: 'domcontentloaded' });
 
         if (await page.getByRole('button', { name: 'Sign in' }).isVisible()) {
+            console.log("Session expired. Logging in...");
             await page.locator('#userSigninLogin').fill(process.env.USERNAME);
             await page.locator('#userSigninPassword').fill(process.env.PASSWORD);
             await page.getByRole('button', { name: 'Sign in' }).click();
+            
             await page.waitForURL(/.*members.*/);
+            
             await context.storageState({ path: SESSION_FILE });
-            await page.goto(`${process.env.WEBSITE}/book-classes/date/${offsetBookingDate(0)}`);
+            console.log("Session refreshed and saved.");
+            return { status: "REFRESHED" };
+        } else {
+            console.log("Session is still valid. No action needed.");
+            return { status: "VALID" };
         }
 
-        const classCard = page.locator('.class').filter({ hasText: className }).filter({ hasText: startTime });
-        const button = classCard.getByRole('button').first();
-        
-        await button.waitFor();
-        const buttonText = await button.innerText();
-
-        page.on('dialog', dialog => dialog.accept());
-        
-        await button.evaluate(b => b.click());
-        await page.waitForTimeout(1000);
-
-        return { bookingType: `CANCELLED (${buttonText})` };
-
     } catch (error) {
-        await browser.close();
+        console.error("Refresh failed:", error.message);
         throw error;
     } finally {
         await browser.close();
     }
 };
 
-module.exports = cancelClass;
+module.exports = refreshSession;

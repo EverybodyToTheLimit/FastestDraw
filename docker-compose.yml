@@ -23,6 +23,8 @@ services:
       - postgres
     ports:
       - '3000:3000'
+    volumes:
+      - ./session_state.json:/opt/app/session_state.json
     restart: unless-stopped
 volumes:
   bookings-db:
