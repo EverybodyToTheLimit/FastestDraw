@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.41.2-jammy
+FROM mcr.microsoft.com/playwright:v1.44.1-jammy
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 
 RUN mkdir -p /opt/app
 WORKDIR /opt/app
