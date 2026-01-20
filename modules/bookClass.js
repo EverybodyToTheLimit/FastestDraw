@@ -57,26 +57,61 @@ const bookClass = async ({ className, startTime }) => {
             console.warn(`Could not find tab for ${targetDayText}.`);
         }
 
-        console.log(`Searching for class: "${className}" at "${startTime}"`);
-        const classCard = page.locator('.class').filter({ hasText: className }).filter({ hasText: startTime });
-        await classCard.first().waitFor({ state: 'attached', timeout: 5000 });
+console.log(`Searching for class: "${className}" at "${startTime}"`);
 
-        const bookButton = classCard.locator('button, input[type="submit"], a.button').first();
-        
-        if (await bookButton.isVisible()) {
-            console.log("Found 'Book' button. Clicking...");
-            await bookButton.click();
+        const allCards = page.locator('div.class.grid');
+        const count = await allCards.count();
+        let targetCard = null;
 
-            try {
-                await expect(bookButton).not.toBeVisible({ timeout: 5000 });
-                console.log("Booking click registered.");
-            } catch (e) {
-                console.log("Button click finished (no specific navigation detected).");
+        console.log(`Found ${count} class cards. Scanning for match...`);
+
+        for (let i = 0; i < count; i++) {
+            const card = allCards.nth(i);
+            const text = await card.innerText();
+
+            if (text.includes(className) && text.includes(startTime)) {
+                console.log(`✅ Match found in card #${i+1}`);
+                targetCard = card;
+                break;
             }
-            
-            return { bookingType: "BROWSER_CLICKED" };
+        }
+
+        if (!targetCard) {
+            throw new Error(`Could not find a class card with Name: "${className}" and Time: "${startTime}"`);
+        }
+
+        const button = targetCard.locator('button');
+        
+        if (await button.isVisible()) {
+            const buttonText = await button.innerText();
+            console.log(`Found button: "${buttonText}"`);
+
+            if (buttonText.includes('Sign Up')) {
+                console.log("Clicking 'Sign Up'...");
+                await button.click();
+                await expect(button).not.toBeVisible({ timeout: 5000 }).catch(() => {});
+                return { bookingType: "BROWSER_CLICKED" };
+            } 
+            else if (buttonText.includes('Waitinglist')) {
+                 console.log("Class full. Clicking 'Join Waitinglist'...");
+                 await button.click();
+                 return { bookingType: "WAITING_LIST" };
+            }
+            else if (buttonText.includes('Cancel')) {
+                console.log("Already booked. No action taken.");
+                return { bookingType: "ALREADY_BOOKED" };
+            }
+            else {
+                console.log(`Unknown button text: ${buttonText}`);
+                throw new Error(`Unexpected button state: ${buttonText}`);
+            }
         } else {
-            throw new Error("Class found, but no 'Book' button visible (maybe fully booked?).");
+            const errorMsg = await targetCard.locator('.message.error').innerText().catch(() => '');
+            if (errorMsg) {
+                console.log(`Class is unbookable: ${errorMsg}`);
+                throw new Error(`Class unavailable: ${errorMsg}`);
+            }
+            throw new Error("Class found, but no actionable button visible.");
         }
 
     } catch (error) {
