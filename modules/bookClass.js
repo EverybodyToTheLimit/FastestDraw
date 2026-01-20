@@ -86,18 +86,20 @@ console.log(`Searching for class: "${className}" at "${startTime}"`);
             const buttonText = await button.innerText();
             console.log(`Found button: "${buttonText}"`);
 
-            if (buttonText.includes('Sign Up')) {
+            const upperText = buttonText.toUpperCase();
+
+            if (upperText.includes('SIGN UP')) {
                 console.log("Clicking 'Sign Up'...");
                 await button.click();
                 await expect(button).not.toBeVisible({ timeout: 5000 }).catch(() => {});
                 return { bookingType: "BROWSER_CLICKED" };
             } 
-            else if (buttonText.includes('Waitinglist')) {
+            else if (upperText.includes('WAITINGLIST')) {
                  console.log("Class full. Clicking 'Join Waitinglist'...");
                  await button.click();
                  return { bookingType: "WAITING_LIST" };
             }
-            else if (buttonText.includes('Cancel')) {
+            else if (upperText.includes('CANCEL')) {
                 console.log("Already booked. No action taken.");
                 return { bookingType: "ALREADY_BOOKED" };
             }
