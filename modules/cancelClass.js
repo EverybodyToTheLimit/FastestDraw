@@ -61,12 +61,9 @@ const cancelClass = async ({ className, startTime }) => {
         const count = await allCards.count();
         let targetCard = null;
 
-        console.log(`Found ${count} class cards. Scanning for match...`);
-
         for (let i = 0; i < count; i++) {
             const card = allCards.nth(i);
             const text = await card.innerText(); 
-
             if (text.includes(className) && text.includes(startTime)) {
                 console.log(`✅ Match found in card #${i+1}`);
                 targetCard = card;
@@ -82,22 +79,25 @@ const cancelClass = async ({ className, startTime }) => {
 
         if (await button.isVisible()) {
             const buttonText = await button.innerText();
-            const upperText = buttonText.toUpperCase();
+            console.log(`Found button: "${buttonText}". preparing to click...`);
+
+            page.once('dialog', async dialog => {
+                console.log(`🔹 Dialog detected: ${dialog.message()}`);
+                await dialog.accept();
+                console.log("🔹 Dialog accepted.");
+            });
+
+            await button.click();
             
-            console.log(`Found button: "${buttonText}"`);
-
-            if (upperText.includes('CANCEL')) {
-                console.log("Found cancellation button. Clicking...");
-                await button.click();
-                
-                await button.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {
-                    console.log("Button click registered (timeout reached).");
-                });
-
-                return { status: "CANCELLED" };
-            } else {
-                throw new Error(`Found class, but button says "${buttonText}" (expected 'Leave' or 'Cancel'). You might not be booked?`);
+            try {
+                await button.waitFor({ state: 'hidden', timeout: 5000 });
+                console.log("Cancellation confirmed (button disappeared).");
+            } catch (e) {
+                console.log("Button did not disappear immediately (might require page reload), but dialog was handled.");
             }
+
+            return { status: "CANCELLED" };
+
         } else {
             throw new Error("Class found, but no button visible.");
         }
