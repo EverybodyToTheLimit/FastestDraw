@@ -11,10 +11,10 @@ const cancelClass = async ({ className, startTime }) => {
 
     try {
         if (fs.existsSync(SESSION_FILE) && fs.statSync(SESSION_FILE).size > 2) {
-            console.log("Loading session from file...");
+            console.log("Loading session for cancellation...");
             context = await browser.newContext({ storageState: SESSION_FILE });
         } else {
-            console.log("Session file missing/empty. Starting fresh.");
+            console.log("Session file missing. Logging in fresh.");
             context = await browser.newContext();
         }
     } catch (e) {
@@ -35,12 +35,10 @@ const cancelClass = async ({ className, startTime }) => {
             await page.getByRole('button', { name: 'Sign in' }).click();
             await page.waitForURL(/.*book-classes.*/);
             await context.storageState({ path: SESSION_FILE });
-            console.log("Session saved.");
         }
 
         const targetDayText = offsetBookingDate(0); 
         console.log(`Looking for date tab: "${targetDayText}"`);
-
         const dayTab = page.locator('#event-booking-date-select a').filter({ hasText: targetDayText }).first();
 
         if (await dayTab.isVisible()) {
@@ -50,39 +48,58 @@ const cancelClass = async ({ className, startTime }) => {
             } else {
                 console.log(`Clicking ${targetDayText}...`);
                 await dayTab.click();
-                await parentLi.waitFor({ state: 'visible' }); 
-                await page.waitForTimeout(2000); 
+                await parentLi.waitFor({ state: 'visible' });
+                await page.waitForTimeout(2000);
             }
         } else {
             console.warn(`Could not find tab for ${targetDayText}.`);
         }
 
         console.log(`Searching for class to cancel: "${className}" at "${startTime}"`);
-        const classCard = page.locator('.class').filter({ hasText: className }).filter({ hasText: startTime });
-        await classCard.first().waitFor({ state: 'attached', timeout: 5000 });
 
-        const leaveButton = classCard.locator('button, input[value="Cancel Waitinglist"], input[value="Cancel Booking"]').first();
+        const allCards = page.locator('div.class.grid');
+        const count = await allCards.count();
+        let targetCard = null;
 
-        if (await leaveButton.isVisible()) {
-            console.log("Found 'Leave' button. Clicking...");
-            
-            page.on('dialog', async dialog => {
-                console.log(`Dialog detected: ${dialog.message()}`);
-                await dialog.accept();
-            });
+        console.log(`Found ${count} class cards. Scanning for match...`);
 
-            await leaveButton.click();
+        for (let i = 0; i < count; i++) {
+            const card = allCards.nth(i);
+            const text = await card.innerText(); 
 
-            try {
-                await expect(leaveButton).not.toBeVisible({ timeout: 5000 });
-                console.log("Cancellation registered.");
-            } catch(e) {
-                console.log("Button click finished.");
+            if (text.includes(className) && text.includes(startTime)) {
+                console.log(`✅ Match found in card #${i+1}`);
+                targetCard = card;
+                break;
             }
+        }
 
-            return { status: "CANCELLED" };
+        if (!targetCard) {
+            throw new Error(`Could not find class "${className}" at "${startTime}" to cancel.`);
+        }
+
+        const button = targetCard.locator('button');
+
+        if (await button.isVisible()) {
+            const buttonText = await button.innerText();
+            const upperText = buttonText.toUpperCase();
+            
+            console.log(`Found button: "${buttonText}"`);
+
+            if (upperText.includes('CANCEL')) {
+                console.log("Found cancellation button. Clicking...");
+                await button.click();
+                
+                await button.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {
+                    console.log("Button click registered (timeout reached).");
+                });
+
+                return { status: "CANCELLED" };
+            } else {
+                throw new Error(`Found class, but button says "${buttonText}" (expected 'Leave' or 'Cancel'). You might not be booked?`);
+            }
         } else {
-            throw new Error("Class found, but no 'Leave' button visible (maybe not booked?).");
+            throw new Error("Class found, but no button visible.");
         }
 
     } catch (error) {
