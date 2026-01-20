@@ -91,7 +91,9 @@ console.log(`Searching for class: "${className}" at "${startTime}"`);
             if (upperText.includes('SIGN UP')) {
                 console.log("Clicking 'Sign Up'...");
                 await button.click();
-                await expect(button).not.toBeVisible({ timeout: 5000 }).catch(() => {});
+                await button.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {
+                    console.log("Button did not disappear, but continuing...");
+                });
                 return { bookingType: "BROWSER_CLICKED" };
             } 
             else if (upperText.includes('WAITINGLIST')) {
