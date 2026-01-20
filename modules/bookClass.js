@@ -10,52 +10,69 @@ const bookClass = async ({ className, startTime }) => {
     let context;
 
     try {
-        if (fs.existsSync(SESSION_FILE)) {
-            const stats = fs.statSync(SESSION_FILE);
-            if (stats.size > 0) {
-                context = await browser.newContext({ storageState: SESSION_FILE });
-            } else {
-                throw new Error("File is empty");
-            }
+        if (fs.existsSync(SESSION_FILE) && fs.statSync(SESSION_FILE).size > 2) {
+            console.log("Loading session from file...");
+            context = await browser.newContext({ storageState: SESSION_FILE });
         } else {
-            throw new Error("File does not exist");
+            console.log("Session file missing/empty. Starting fresh.");
+            context = await browser.newContext();
         }
     } catch (e) {
-        console.log("Session file missing or invalid. Starting fresh context.");
+        console.log("Error loading session:", e.message);
         context = await browser.newContext();
     }
 
     const page = await context.newPage();
-    
-    await page.route('**/*.{png,jpg,jpeg,svg,css,woff,woff2}', route => route.abort());
 
     try {
-        await page.goto(process.env.WEBSITE + '/book-classes', { waitUntil: 'domcontentloaded' });
+        console.log("Navigating to booking page...");
+        await page.goto(process.env.WEBSITE + '/book-classes', { waitUntil: 'networkidle' });
 
         if (await page.getByRole('button', { name: 'Sign in' }).isVisible()) {
-            console.log("Session invalid. Logging in...");
+            console.log("Logging in...");
             await page.locator('#userSigninLogin').fill(process.env.USERNAME);
             await page.locator('#userSigninPassword').fill(process.env.PASSWORD);
             await page.getByRole('button', { name: 'Sign in' }).click();
-            await page.waitForURL(/.*members.*/);
-            
-
+            await page.waitForURL(/.*book-classes.*/);
             await context.storageState({ path: SESSION_FILE });
-            console.log("New session saved.");
+            console.log("Session saved.");
         }
 
-        const targetDate = offsetBookingDate(2);
-        if (!page.url().includes(targetDate)) {
-            await page.goto(`${process.env.WEBSITE}/book-classes/date/${targetDate}`, { waitUntil: 'domcontentloaded' });
+        const targetDayText = offsetBookingDate(2); 
+        console.log(`Looking for date tab: "${targetDayText}"`);
+
+        const dayTab = page.locator('#event-booking-date-select a').filter({ hasText: targetDayText }).first();
+
+        if (await dayTab.isVisible()) {
+            const parentLi = dayTab.locator('xpath=..');
+            const classAttribute = await parentLi.getAttribute('class');
+            
+            if (classAttribute && classAttribute.includes('active')) {
+                console.log(`Date ${targetDayText} is already selected.`);
+            } else {
+                console.log(`Clicking ${targetDayText}...`);
+                await dayTab.click();
+                
+                await parentLi.waitFor({ state: 'visible' });
+                await page.waitForTimeout(2000);
+            }
+        } else {
+            console.warn(`Could not find tab for ${targetDayText}. Available tabs:`);
+            const availableTabs = await page.locator('#event-booking-date-select a').allInnerTexts();
+            console.warn(availableTabs);
         }
 
+        console.log(`Searching for class: "${className}" at "${startTime}"`);
+        
         const classCard = page.locator('.class').filter({ hasText: className }).filter({ hasText: startTime });
         await classCard.first().waitFor({ state: 'attached', timeout: 5000 });
 
         const bookingId = await classCard.locator('input[name="id"]').getAttribute('value');
         const timestamp = await classCard.locator('input[name="timestamp"]').getAttribute('value');
 
-        if (!bookingId) throw new Error("Class ID not found in DOM");
+        if (!bookingId) throw new Error("Class ID not found.");
+
+        console.log(`Found Class ID: ${bookingId}. Booking now...`);
 
         const response = await page.request.post(`${process.env.WEBSITE}/book-classes`, {
             form: { id: bookingId, timestamp: timestamp }
@@ -66,7 +83,8 @@ const bookClass = async ({ className, startTime }) => {
         return { bookingType: "API_BOOKED" };
 
     } catch (error) {
-        await page.screenshot({ path: `error-${Date.now()}.png` });
+        console.error("Booking Error:", error.message);
+        await page.screenshot({ path: '/opt/app/error_booking.png' });
         throw error;
     } finally {
         await browser.close();
