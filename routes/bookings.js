@@ -75,12 +75,17 @@ router.post("/:uid/cancel", async function (req, res) {
         const booking = await db.Booking.findOne({ where: { bookingUid: req.params.uid } });
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
-        const response = await cancelClass({ booking });
+        const response = await cancelClass({ 
+            className: booking.className, 
+            startTime: booking.startTime 
+        });
+
         booking.bookingType = "CANCELLED";
         await booking.save();
         
         res.status(200).json(booking);
     } catch (err) {
+        console.error("Cancellation Route Error:", err.message);
         res.status(500).json({ error: err.message });
     }
 });
