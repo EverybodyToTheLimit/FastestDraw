@@ -45,42 +45,39 @@ const bookClass = async ({ className, startTime }) => {
 
         if (await dayTab.isVisible()) {
             const parentLi = dayTab.locator('xpath=..');
-            const classAttribute = await parentLi.getAttribute('class');
-            
-            if (classAttribute && classAttribute.includes('active')) {
-                console.log(`Date ${targetDayText} is already selected.`);
+            if (await parentLi.getAttribute('class').then(c => c && c.includes('active'))) {
+                console.log(`Date ${targetDayText} is already active.`);
             } else {
                 console.log(`Clicking ${targetDayText}...`);
                 await dayTab.click();
-                
-                await parentLi.waitFor({ state: 'visible' });
+                await parentLi.waitFor({ state: 'visible' }); 
                 await page.waitForTimeout(2000);
             }
         } else {
-            console.warn(`Could not find tab for ${targetDayText}. Available tabs:`);
-            const availableTabs = await page.locator('#event-booking-date-select a').allInnerTexts();
-            console.warn(availableTabs);
+            console.warn(`Could not find tab for ${targetDayText}.`);
         }
 
         console.log(`Searching for class: "${className}" at "${startTime}"`);
-        
         const classCard = page.locator('.class').filter({ hasText: className }).filter({ hasText: startTime });
         await classCard.first().waitFor({ state: 'attached', timeout: 5000 });
 
-        const bookingId = await classCard.locator('input[name="id"]').getAttribute('value');
-        const timestamp = await classCard.locator('input[name="timestamp"]').getAttribute('value');
+        const bookButton = classCard.locator('button, input[type="submit"], a.button').first();
+        
+        if (await bookButton.isVisible()) {
+            console.log("Found 'Book' button. Clicking...");
+            await bookButton.click();
 
-        if (!bookingId) throw new Error("Class ID not found.");
-
-        console.log(`Found Class ID: ${bookingId}. Booking now...`);
-
-        const response = await page.request.post(`${process.env.WEBSITE}/book-classes`, {
-            form: { id: bookingId, timestamp: timestamp }
-        });
-
-        if (!response.ok()) throw new Error(`API Error: ${response.status()}`);
-
-        return { bookingType: "API_BOOKED" };
+            try {
+                await expect(bookButton).not.toBeVisible({ timeout: 5000 });
+                console.log("Booking click registered.");
+            } catch (e) {
+                console.log("Button click finished (no specific navigation detected).");
+            }
+            
+            return { bookingType: "BROWSER_CLICKED" };
+        } else {
+            throw new Error("Class found, but no 'Book' button visible (maybe fully booked?).");
+        }
 
     } catch (error) {
         console.error("Booking Error:", error.message);

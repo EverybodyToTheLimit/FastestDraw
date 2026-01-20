@@ -5,59 +5,89 @@ const offsetBookingDate = require('../helpers/offsetBookingDate');
 
 const SESSION_FILE = path.join(__dirname, '../session_state.json');
 
-const cancelClass = async ({ booking }) => {
+const cancelClass = async ({ className, startTime }) => {
     const browser = await chromium.launch();
     let context;
 
     try {
-        if (fs.existsSync(SESSION_FILE)) {
-            // Try to load the file
-            const stats = fs.statSync(SESSION_FILE);
-            if (stats.size > 0) {
-                context = await browser.newContext({ storageState: SESSION_FILE });
-            } else {
-                throw new Error("File is empty");
-            }
+        if (fs.existsSync(SESSION_FILE) && fs.statSync(SESSION_FILE).size > 2) {
+            console.log("Loading session from file...");
+            context = await browser.newContext({ storageState: SESSION_FILE });
         } else {
-            throw new Error("File does not exist");
+            console.log("Session file missing/empty. Starting fresh.");
+            context = await browser.newContext();
         }
     } catch (e) {
-        console.log("Session file missing or invalid. Starting fresh context.");
+        console.log("Error loading session:", e.message);
         context = await browser.newContext();
     }
 
     const page = await context.newPage();
-    await page.route('**/*.{png,jpg,jpeg,svg,css,woff,woff2}', route => route.abort());
 
     try {
-        const { className, startTime } = booking;
-        
-        await page.goto(`${process.env.WEBSITE}/book-classes/date/${offsetBookingDate(0)}`, { waitUntil: 'domcontentloaded' });
+        console.log("Navigating to booking page...");
+        await page.goto(process.env.WEBSITE + '/book-classes', { waitUntil: 'networkidle' });
 
         if (await page.getByRole('button', { name: 'Sign in' }).isVisible()) {
+            console.log("Logging in...");
             await page.locator('#userSigninLogin').fill(process.env.USERNAME);
             await page.locator('#userSigninPassword').fill(process.env.PASSWORD);
             await page.getByRole('button', { name: 'Sign in' }).click();
-            await page.waitForURL(/.*members.*/);
+            await page.waitForURL(/.*book-classes.*/);
             await context.storageState({ path: SESSION_FILE });
-            await page.goto(`${process.env.WEBSITE}/book-classes/date/${offsetBookingDate(0)}`);
+            console.log("Session saved.");
         }
 
+        const targetDayText = offsetBookingDate(0); 
+        console.log(`Looking for date tab: "${targetDayText}"`);
+
+        const dayTab = page.locator('#event-booking-date-select a').filter({ hasText: targetDayText }).first();
+
+        if (await dayTab.isVisible()) {
+            const parentLi = dayTab.locator('xpath=..');
+            if (await parentLi.getAttribute('class').then(c => c && c.includes('active'))) {
+                console.log(`Date ${targetDayText} is already active.`);
+            } else {
+                console.log(`Clicking ${targetDayText}...`);
+                await dayTab.click();
+                await parentLi.waitFor({ state: 'visible' }); 
+                await page.waitForTimeout(2000); 
+            }
+        } else {
+            console.warn(`Could not find tab for ${targetDayText}.`);
+        }
+
+        console.log(`Searching for class to cancel: "${className}" at "${startTime}"`);
         const classCard = page.locator('.class').filter({ hasText: className }).filter({ hasText: startTime });
-        const button = classCard.getByRole('button').first();
-        
-        await button.waitFor();
-        const buttonText = await button.innerText();
+        await classCard.first().waitFor({ state: 'attached', timeout: 5000 });
 
-        page.on('dialog', dialog => dialog.accept());
-        
-        await button.evaluate(b => b.click());
-        await page.waitForTimeout(1000);
+        const leaveButton = classCard.locator('button, input[value="Cancel Waitinglist"], input[value="Cancel Booking"]').first();
 
-        return { bookingType: `CANCELLED (${buttonText})` };
+        if (await leaveButton.isVisible()) {
+            console.log("Found 'Leave' button. Clicking...");
+            
+            page.on('dialog', async dialog => {
+                console.log(`Dialog detected: ${dialog.message()}`);
+                await dialog.accept();
+            });
+
+            await leaveButton.click();
+
+            try {
+                await expect(leaveButton).not.toBeVisible({ timeout: 5000 });
+                console.log("Cancellation registered.");
+            } catch(e) {
+                console.log("Button click finished.");
+            }
+
+            return { status: "CANCELLED" };
+        } else {
+            throw new Error("Class found, but no 'Leave' button visible (maybe not booked?).");
+        }
 
     } catch (error) {
-        await browser.close();
+        console.error("Cancellation Error:", error.message);
+        await page.screenshot({ path: '/opt/app/error_cancellation.png' });
         throw error;
     } finally {
         await browser.close();
