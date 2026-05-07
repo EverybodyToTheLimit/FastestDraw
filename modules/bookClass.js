@@ -41,7 +41,7 @@ const bookClass = async ({ className, startTime }) => {
                     await page.locator('#userSigninLogin').fill(process.env.USERNAME);
                     await page.locator('#userSigninPassword').fill(process.env.PASSWORD);
                     await page.getByRole('button', { name: 'Sign in' }).click();
-                    await page.waitForURL(/.*book-classes.*/);
+                    await page.waitForURL(/.*(book-classes|members).*/);
                     await context.storageState({ path: SESSION_FILE });
                 }
 

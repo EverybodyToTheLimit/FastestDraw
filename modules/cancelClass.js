@@ -5,6 +5,11 @@ const offsetBookingDate = require('../helpers/offsetBookingDate');
 
 const SESSION_FILE = path.join(__dirname, '../session_state.json');
 
+const normalize = (str) => {
+    if (!str) return "";
+    return str.toLowerCase().replace(/\s+/g, ' ').trim();
+};
+
 const cancelClass = async ({ className, startTime }) => {
     const browser = await chromium.launch();
     let context;
@@ -33,11 +38,13 @@ const cancelClass = async ({ className, startTime }) => {
             await page.locator('#userSigninLogin').fill(process.env.USERNAME);
             await page.locator('#userSigninPassword').fill(process.env.PASSWORD);
             await page.getByRole('button', { name: 'Sign in' }).click();
-            await page.waitForURL(/.*book-classes.*/);
+            await page.waitForURL(/.*(book-classes|members).*/);
             await context.storageState({ path: SESSION_FILE });
         }
 
-        const targetDayText = offsetBookingDate(0); 
+        const startHour = parseInt(String(startTime).slice(0, 2), 10);
+        const dayOffset = Number.isFinite(startHour) && startHour < 10 ? 1 : 0;
+        const targetDayText = offsetBookingDate(dayOffset);
         console.log(`Looking for date tab: "${targetDayText}"`);
         const dayTab = page.locator('#event-booking-date-select a').filter({ hasText: targetDayText }).first();
 
@@ -57,14 +64,25 @@ const cancelClass = async ({ className, startTime }) => {
 
         console.log(`Searching for class to cancel: "${className}" at "${startTime}"`);
 
+        try {
+            await page.locator(`div.class.grid:has-text("${startTime}")`).first().waitFor({ state: 'visible', timeout: 5000 });
+        } catch (e) {
+            console.log(`⚠️ No cards with time ${startTime} appeared yet. Continuing to scan...`);
+        }
+
         const allCards = page.locator('div.class.grid');
         const count = await allCards.count();
         let targetCard = null;
 
+        const searchName = normalize(className);
+        const searchTime = normalize(startTime);
+
         for (let i = 0; i < count; i++) {
             const card = allCards.nth(i);
-            const text = await card.innerText(); 
-            if (text.includes(className) && text.includes(startTime)) {
+            const rawText = await card.innerText();
+            const cardText = normalize(rawText);
+
+            if (cardText.includes(searchTime) && cardText.includes(searchName)) {
                 console.log(`✅ Match found in card #${i+1}`);
                 targetCard = card;
                 break;
@@ -75,7 +93,7 @@ const cancelClass = async ({ className, startTime }) => {
             throw new Error(`Could not find class "${className}" at "${startTime}" to cancel.`);
         }
 
-        const button = targetCard.locator('button');
+        const button = targetCard.locator('button.cancel, input[value="Cancel Booking"], input[value="Cancel Waitinglist"]').first();
 
         if (await button.isVisible()) {
             const buttonText = await button.innerText();
@@ -99,7 +117,7 @@ const cancelClass = async ({ className, startTime }) => {
             return { status: "CANCELLED" };
 
         } else {
-            throw new Error("Class found, but no button visible.");
+            throw new Error("Class found, but not in a booked state (no cancel button).");
         }
 
     } catch (error) {
