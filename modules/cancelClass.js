@@ -2,13 +2,9 @@ const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const offsetBookingDate = require('../helpers/offsetBookingDate');
+const { findClassCard } = require('../helpers/matchClassCard');
 
 const SESSION_FILE = path.join(__dirname, '../session_state.json');
-
-const normalize = (str) => {
-    if (!str) return "";
-    return str.toLowerCase().replace(/\s+/g, ' ').trim();
-};
 
 const cancelClass = async ({ className, startTime }) => {
     const browser = await chromium.launch();
@@ -71,27 +67,7 @@ const cancelClass = async ({ className, startTime }) => {
         }
 
         const allCards = page.locator('div.class.grid');
-        const count = await allCards.count();
-        let targetCard = null;
-
-        const searchName = normalize(className);
-        const searchTime = normalize(startTime);
-
-        for (let i = 0; i < count; i++) {
-            const card = allCards.nth(i);
-            const rawText = await card.innerText();
-            const cardText = normalize(rawText);
-
-            if (cardText.includes(searchTime) && cardText.includes(searchName)) {
-                console.log(`✅ Match found in card #${i+1}`);
-                targetCard = card;
-                break;
-            }
-        }
-
-        if (!targetCard) {
-            throw new Error(`Could not find class "${className}" at "${startTime}" to cancel.`);
-        }
+        const { card: targetCard } = await findClassCard(allCards, { className, startTime });
 
         const button = targetCard.locator('button.cancel, input[value="Cancel Booking"], input[value="Cancel Waitinglist"]').first();
 
